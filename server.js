@@ -60,12 +60,22 @@ async function renderHeadlineImage(lines) {
   ctx.drawImage(template, 0, 0, OUTPUT_W, OUTPUT_H);
 
   const marginX = Math.round(OUTPUT_W * 0.075);
-  const fontSize = Math.round(OUTPUT_W * 0.105);
-  const lineGap = Math.round(fontSize * 1.12);
-  let y = Math.round(OUTPUT_H * 0.30);
+  const maxTextWidth = OUTPUT_W - marginX * 2;
+  let fontSize = Math.round(OUTPUT_W * 0.105);
 
   ctx.textBaseline = "top";
-  ctx.font = `${fontSize}px "Poppins-Bold"`;
+
+  // Schriftgroesse so lange verkleinern, bis die laengste Zeile sicher hineinpasst
+  const upperLines = lines.map((l) => l.toUpperCase());
+  let widest = maxTextWidth + 1;
+  while (widest > maxTextWidth && fontSize > 24) {
+    ctx.font = `${fontSize}px "Poppins-Bold"`;
+    widest = Math.max(...upperLines.map((l) => ctx.measureText(l).width));
+    if (widest > maxTextWidth) fontSize -= 4;
+  }
+
+  const lineGap = Math.round(fontSize * 1.15);
+  let y = Math.round(OUTPUT_H * 0.30);
 
   ctx.strokeStyle = ACCENT_COLOR;
   ctx.lineWidth = 4;
@@ -74,12 +84,13 @@ async function renderHeadlineImage(lines) {
   ctx.lineTo(Math.round(OUTPUT_W * 0.03), Math.round(OUTPUT_H * 0.38));
   ctx.stroke();
 
-  lines.forEach((line, i) => {
-    ctx.fillStyle = i === lines.length - 1 ? ACCENT_COLOR : TEXT_COLOR;
-    ctx.fillText(line.toUpperCase(), marginX, y + i * lineGap);
+  ctx.font = `${fontSize}px "Poppins-Bold"`;
+  upperLines.forEach((line, i) => {
+    ctx.fillStyle = i === upperLines.length - 1 ? ACCENT_COLOR : TEXT_COLOR;
+    ctx.fillText(line, marginX, y + i * lineGap);
   });
 
-  const underlineY = y + lines.length * lineGap + Math.round(OUTPUT_H * 0.015);
+  const underlineY = y + upperLines.length * lineGap + Math.round(OUTPUT_H * 0.015);
   ctx.beginPath();
   ctx.moveTo(marginX, underlineY);
   ctx.lineTo(marginX + Math.round(OUTPUT_W * 0.12), underlineY);
