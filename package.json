@@ -1,0 +1,16 @@
+{
+  "name": "reel-render-service",
+  "version": "2.0.0",
+  "description": "Rendert die Beliza-Vorlage mit KI-generierter Headline und mischt Musik dazu (canvas + ffmpeg).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "canvas": "^2.11.2"
+  }
+}
