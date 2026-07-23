@@ -15,8 +15,8 @@ const TEMPLATE_PATH = path.join(__dirname, "assets", "template.png");
 const FONT_PATH = path.join(__dirname, "assets", "Poppins-Bold.ttf");
 registerFont(FONT_PATH, { family: "Poppins-Bold" });
 
-const OUTPUT_W = 1080;
-const OUTPUT_H = 1920;
+const OUTPUT_W = 720;
+const OUTPUT_H = 1280;
 const ACCENT_COLOR = "rgb(190, 130, 88)";
 const TEXT_COLOR = "rgb(20, 20, 20)";
 
@@ -127,7 +127,10 @@ app.post("/render-reel", async (req, res) => {
       "-vf", `scale=${OUTPUT_W}:${OUTPUT_H}`,
       "-pix_fmt", "yuv420p",
       "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-crf", "28",
       "-c:a", "aac",
+      "-b:a", "96k",
       "-shortest",
       outputPath,
     ];
