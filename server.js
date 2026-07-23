@@ -138,10 +138,10 @@ app.post("/render-reel", async (req, res) => {
       "-vf", `scale=${OUTPUT_W}:${OUTPUT_H}`,
       "-pix_fmt", "yuv420p",
       "-c:v", "libx264",
-      "-preset", "veryfast",
-      "-crf", "28",
+      "-preset", "fast",
+      "-crf", "18",
       "-c:a", "aac",
-      "-b:a", "96k",
+      "-b:a", "128k",
       "-shortest",
       outputPath,
     ];
