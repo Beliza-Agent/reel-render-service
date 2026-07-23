@@ -66,7 +66,7 @@ async function renderHeadlineImage(lines) {
   ctx.textBaseline = "top";
 
   // Schriftgroesse so lange verkleinern, bis die laengste Zeile sicher hineinpasst
-  const upperLines = lines.map((l) => l.toUpperCase());
+  const upperLines = lines.map((l) => l.replace(/ß/g, "SS").toUpperCase());
   let widest = maxTextWidth + 1;
   while (widest > maxTextWidth && fontSize > 24) {
     ctx.font = `${fontSize}px "Poppins-Bold"`;
