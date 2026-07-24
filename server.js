@@ -12,6 +12,7 @@ const app = express();
 app.use(express.json());
 
 const TEMPLATE_PATH = path.join(__dirname, "assets", "template.png");
+const SLIDE_TEMPLATE_PATH = path.join(__dirname, "assets", "slide-template.png"); // eigenes 4:5-Template fuer Karussell-Slides
 const FONT_BOLD_PATH = path.join(__dirname, "assets", "Poppins-Bold.ttf");
 const FONT_MEDIUM_PATH = path.join(__dirname, "assets", "Poppins-Medium.ttf");
 registerFont(FONT_BOLD_PATH, { family: "Poppins-Bold" });
@@ -59,21 +60,23 @@ function runFfmpeg(args) {
 
 // NEU: zeichnet ein Bild "cover"-artig (wie CSS background-size: cover) statt es zu verzerren.
 // Skaliert proportional und schneidet Ueberstand ab, damit das Seitenverhaeltnis erhalten bleibt.
-function drawImageCover(ctx, img, targetW, targetH) {
+function drawImageCover(ctx, img, targetW, targetH, anchor = "center") {
   const srcRatio = img.width / img.height;
   const targetRatio = targetW / targetH;
   let sx, sy, sw, sh;
 
   if (srcRatio > targetRatio) {
+    // Quellbild breiter als Ziel -> links/rechts wird zugeschnitten
     sh = img.height;
     sw = sh * targetRatio;
-    sx = (img.width - sw) / 2;
+    sx = anchor === "left" ? 0 : anchor === "right" ? img.width - sw : (img.width - sw) / 2;
     sy = 0;
   } else {
+    // Quellbild hoeher/schmaler als Ziel -> oben/unten wird zugeschnitten
     sw = img.width;
     sh = sw / targetRatio;
     sx = 0;
-    sy = (img.height - sh) / 2;
+    sy = anchor === "top" ? 0 : anchor === "bottom" ? img.height - sh : (img.height - sh) / 2;
   }
 
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
@@ -290,11 +293,12 @@ function drawIcon(ctx, iconName, x, y, size, color) {
 // Headline-Stil ist bewusst identisch zur Reel-Headline (renderHeadlineImage): gleiche Schriftgroessen-Logik,
 // gleiche Schriftart (Poppins-Medium), letzte Zeile in Akzentfarbe, Akzent-Strich darueber, Unterstreichung darunter.
 async function renderSlideImage({ ueberschrift, text, nummer, gesamt, icon }) {
-  const template = await loadImage(TEMPLATE_PATH);
+  const template = await loadImage(SLIDE_TEMPLATE_PATH);
   const canvas = createCanvas(SLIDE_W, SLIDE_H);
   const ctx = canvas.getContext("2d");
 
-  drawImageCover(ctx, template, SLIDE_W, SLIDE_H);
+  // Eigenes Slide-Template hat bereits das richtige 4:5-Format -> einfaches Draw reicht, kein Zuschnitt noetig
+  ctx.drawImage(template, 0, 0, SLIDE_W, SLIDE_H);
 
   const marginX = Math.round(SLIDE_W * 0.075);
   const maxTextWidth = SLIDE_W - marginX * 2;
