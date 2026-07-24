@@ -22,7 +22,7 @@ const OUTPUT_H = 1536;
 const ACCENT_COLOR = "rgb(190, 130, 88)";
 const TEXT_COLOR = "rgb(20, 20, 20)";
 
-// NEU: eigene Masse fuer Karussell-Slides (Instagram-Format 4:5)
+// Karussell-Slides: eigenes Format (Instagram 4:5)
 const SLIDE_W = 1080;
 const SLIDE_H = 1350;
 
@@ -57,6 +57,28 @@ function runFfmpeg(args) {
   });
 }
 
+// NEU: zeichnet ein Bild "cover"-artig (wie CSS background-size: cover) statt es zu verzerren.
+// Skaliert proportional und schneidet Ueberstand ab, damit das Seitenverhaeltnis erhalten bleibt.
+function drawImageCover(ctx, img, targetW, targetH) {
+  const srcRatio = img.width / img.height;
+  const targetRatio = targetW / targetH;
+  let sx, sy, sw, sh;
+
+  if (srcRatio > targetRatio) {
+    sh = img.height;
+    sw = sh * targetRatio;
+    sx = (img.width - sw) / 2;
+    sy = 0;
+  } else {
+    sw = img.width;
+    sh = sw / targetRatio;
+    sx = 0;
+    sy = (img.height - sh) / 2;
+  }
+
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+}
+
 // Zeichnet die Kopfzeilen-Headline auf die Vorlage und gibt einen PNG-Buffer zurueck
 async function renderHeadlineImage(lines) {
   const template = await loadImage(TEMPLATE_PATH);
@@ -71,7 +93,6 @@ async function renderHeadlineImage(lines) {
 
   ctx.textBaseline = "top";
 
-  // Schriftgroesse so lange verkleinern, bis die laengste Zeile sicher hineinpasst
   const upperLines = lines.map((l) => l.replace(/ß/g, "SS").toUpperCase());
   let widest = maxTextWidth + 1;
   while (widest > maxTextWidth && fontSize > 18) {
@@ -105,7 +126,6 @@ async function renderHeadlineImage(lines) {
   return canvas.toBuffer("image/png");
 }
 
-// NEU: bricht einen Text an Wortgrenzen um, sodass jede Zeile in maxWidth passt
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(/\s+/);
   const lines = [];
@@ -124,19 +144,161 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// NEU: zeichnet eine Karussell-Slide (Ueberschrift + Fliesstext) auf die bestehende Vorlage
-async function renderSlideImage({ ueberschrift, text, nummer, gesamt }) {
+// NEU: einfache Vektor-Icons in der Akzentfarbe, gezeichnet mit Grundformen (kein Bild-Asset noetig)
+function drawIcon(ctx, iconName, x, y, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(3, size * 0.045);
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  const s = size;
+
+  switch (iconName) {
+    case "laptop": {
+      ctx.strokeRect(x + s * 0.08, y + s * 0.12, s * 0.84, s * 0.55);
+      ctx.beginPath();
+      ctx.moveTo(x - s * 0.02, y + s * 0.75);
+      ctx.lineTo(x + s * 1.02, y + s * 0.75);
+      ctx.lineTo(x + s * 0.9, y + s * 0.92);
+      ctx.lineTo(x + s * 0.1, y + s * 0.92);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    case "smartphone": {
+      ctx.strokeRect(x + s * 0.28, y + s * 0.05, s * 0.44, s * 0.9);
+      ctx.beginPath();
+      ctx.arc(x + s * 0.5, y + s * 0.82, s * 0.035, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case "chart": {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.08, y + s * 0.92);
+      ctx.lineTo(x + s * 0.08, y + s * 0.08);
+      ctx.moveTo(x + s * 0.08, y + s * 0.92);
+      ctx.lineTo(x + s * 0.95, y + s * 0.92);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.2, y + s * 0.7);
+      ctx.lineTo(x + s * 0.42, y + s * 0.5);
+      ctx.lineTo(x + s * 0.6, y + s * 0.62);
+      ctx.lineTo(x + s * 0.88, y + s * 0.25);
+      ctx.stroke();
+      break;
+    }
+    case "gear": {
+      const cx = x + s * 0.5, cy = y + s * 0.5, r = s * 0.28;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rOuter = r * 1.5;
+        ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        ctx.lineTo(cx + Math.cos(a) * rOuter, cy + Math.sin(a) * rOuter);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    }
+    case "chat": {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.15, y + s * 0.15);
+      ctx.lineTo(x + s * 0.85, y + s * 0.15);
+      ctx.quadraticCurveTo(x + s * 0.95, y + s * 0.15, x + s * 0.95, y + s * 0.25);
+      ctx.lineTo(x + s * 0.95, y + s * 0.6);
+      ctx.quadraticCurveTo(x + s * 0.95, y + s * 0.7, x + s * 0.85, y + s * 0.7);
+      ctx.lineTo(x + s * 0.35, y + s * 0.7);
+      ctx.lineTo(x + s * 0.2, y + s * 0.92);
+      ctx.lineTo(x + s * 0.25, y + s * 0.7);
+      ctx.lineTo(x + s * 0.15, y + s * 0.7);
+      ctx.quadraticCurveTo(x + s * 0.05, y + s * 0.7, x + s * 0.05, y + s * 0.6);
+      ctx.lineTo(x + s * 0.05, y + s * 0.25);
+      ctx.quadraticCurveTo(x + s * 0.05, y + s * 0.15, x + s * 0.15, y + s * 0.15);
+      ctx.stroke();
+      break;
+    }
+    case "lightbulb": {
+      const cx = x + s * 0.5, cy = y + s * 0.38, r = s * 0.3;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.4, cy + r * 0.85);
+      ctx.lineTo(cx + r * 0.4, cy + r * 0.85);
+      ctx.moveTo(cx - r * 0.35, y + s * 0.85);
+      ctx.lineTo(cx + r * 0.35, y + s * 0.85);
+      ctx.stroke();
+      break;
+    }
+    case "checklist": {
+      for (let i = 0; i < 3; i++) {
+        const yy = y + s * (0.15 + i * 0.3);
+        ctx.strokeRect(x + s * 0.05, yy, s * 0.18, s * 0.18);
+        ctx.beginPath();
+        ctx.moveTo(x + s * 0.32, yy + s * 0.09);
+        ctx.lineTo(x + s * 0.95, yy + s * 0.09);
+        ctx.stroke();
+      }
+      break;
+    }
+    case "calendar": {
+      ctx.strokeRect(x + s * 0.08, y + s * 0.15, s * 0.84, s * 0.75);
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.08, y + s * 0.38);
+      ctx.lineTo(x + s * 0.92, y + s * 0.38);
+      ctx.moveTo(x + s * 0.28, y + s * 0.05);
+      ctx.lineTo(x + s * 0.28, y + s * 0.22);
+      ctx.moveTo(x + s * 0.72, y + s * 0.05);
+      ctx.lineTo(x + s * 0.72, y + s * 0.22);
+      ctx.stroke();
+      break;
+    }
+    case "arrow": {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.1, y + s * 0.5);
+      ctx.lineTo(x + s * 0.85, y + s * 0.5);
+      ctx.moveTo(x + s * 0.6, y + s * 0.25);
+      ctx.lineTo(x + s * 0.9, y + s * 0.5);
+      ctx.lineTo(x + s * 0.6, y + s * 0.75);
+      ctx.stroke();
+      break;
+    }
+    case "shield": {
+      ctx.beginPath();
+      ctx.moveTo(x + s * 0.5, y + s * 0.05);
+      ctx.lineTo(x + s * 0.9, y + s * 0.2);
+      ctx.lineTo(x + s * 0.9, y + s * 0.55);
+      ctx.quadraticCurveTo(x + s * 0.9, y + s * 0.85, x + s * 0.5, y + s * 0.98);
+      ctx.quadraticCurveTo(x + s * 0.1, y + s * 0.85, x + s * 0.1, y + s * 0.55);
+      ctx.lineTo(x + s * 0.1, y + s * 0.2);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    default:
+      break;
+  }
+
+  ctx.restore();
+}
+
+// Zeichnet eine Karussell-Slide (Icon + Ueberschrift + Fliesstext) auf die bestehende Vorlage
+async function renderSlideImage({ ueberschrift, text, nummer, gesamt, icon }) {
   const template = await loadImage(TEMPLATE_PATH);
   const canvas = createCanvas(SLIDE_W, SLIDE_H);
   const ctx = canvas.getContext("2d");
 
-  ctx.drawImage(template, 0, 0, SLIDE_W, SLIDE_H);
+  // GEAENDERT: cover statt stretch, damit die Vorlage nicht verzerrt wird
+  drawImageCover(ctx, template, SLIDE_W, SLIDE_H);
 
   const marginX = Math.round(SLIDE_W * 0.09);
   const maxTextWidth = SLIDE_W - marginX * 2;
   ctx.textBaseline = "top";
 
-  // Slide-Zaehler oben rechts (z. B. "3/10")
   if (nummer && gesamt) {
     ctx.font = `${Math.round(SLIDE_W * 0.032)}px "Poppins-Medium"`;
     ctx.fillStyle = ACCENT_COLOR;
@@ -145,15 +307,13 @@ async function renderSlideImage({ ueberschrift, text, nummer, gesamt }) {
     ctx.fillText(counterText, SLIDE_W - marginX - counterWidth, Math.round(SLIDE_H * 0.05));
   }
 
-  // Akzent-Strich links, wie beim Reel-Template
-  ctx.strokeStyle = ACCENT_COLOR;
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(Math.round(SLIDE_W * 0.03), Math.round(SLIDE_H * 0.12));
-  ctx.lineTo(Math.round(SLIDE_W * 0.03), Math.round(SLIDE_H * 0.19));
-  ctx.stroke();
+  // NEU: Icon statt Akzent-Strich
+  const iconSize = Math.round(SLIDE_W * 0.13);
+  const iconY = Math.round(SLIDE_H * 0.09);
+  if (icon && icon !== "none") {
+    drawIcon(ctx, icon, marginX, iconY, iconSize, ACCENT_COLOR);
+  }
 
-  // Ueberschrift: Schriftgroesse verkleinern, bis max. 4 Zeilen passen
   let headlineFontSize = Math.round(SLIDE_W * 0.058);
   let headlineLines = [];
   do {
@@ -163,7 +323,7 @@ async function renderSlideImage({ ueberschrift, text, nummer, gesamt }) {
   } while (headlineLines.length > 4 && headlineFontSize > 24);
 
   const headlineLineGap = Math.round(headlineFontSize * 1.2);
-  let y = Math.round(SLIDE_H * 0.15);
+  let y = iconY + iconSize + Math.round(SLIDE_H * 0.045);
 
   ctx.fillStyle = TEXT_COLOR;
   headlineLines.forEach((line, i) => {
@@ -172,7 +332,6 @@ async function renderSlideImage({ ueberschrift, text, nummer, gesamt }) {
 
   y += headlineLines.length * headlineLineGap + Math.round(SLIDE_H * 0.035);
 
-  // Fliesstext: Schriftgroesse verkleinern, bis er in den verbleibenden Platz passt
   const maxBodyBottom = Math.round(SLIDE_H * 0.92);
   const availableHeight = maxBodyBottom - y;
   let bodyFontSize = Math.round(SLIDE_W * 0.034);
@@ -191,16 +350,13 @@ async function renderSlideImage({ ueberschrift, text, nummer, gesamt }) {
     ctx.fillText(line, marginX, y + i * bodyLineGap);
   });
 
-  // Kleines Branding unten
-  ctx.font = `${Math.round(SLIDE_W * 0.026)}px "Poppins-Medium"`;
-  ctx.fillStyle = ACCENT_COLOR;
-  ctx.fillText("BELIZA AGENTICS", marginX, Math.round(SLIDE_H * 0.955));
+  // ENTFERNT: doppeltes "BELIZA AGENTICS"-Branding (steht schon im template.png)
 
   return canvas.toBuffer("image/png");
 }
 
 app.get("/", (req, res) => {
-  res.send("Reel-Render-Dienst laeuft. POST /render-reel mit { headline_lines, audio_url }. POST /render-slide mit { ueberschrift, text, nummer, gesamt }.");
+  res.send("Reel-Render-Dienst laeuft. POST /render-reel mit { headline_lines, audio_url }. POST /render-slide mit { ueberschrift, text, nummer, gesamt, icon }.");
 });
 
 app.post("/render-reel", async (req, res) => {
@@ -260,16 +416,15 @@ app.post("/render-reel", async (req, res) => {
   }
 });
 
-// NEU: Endpoint fuer einzelne Karussell-Slides (statisches PNG, kein Audio/Video)
 app.post("/render-slide", async (req, res) => {
-  const { ueberschrift, text, nummer, gesamt } = req.body || {};
+  const { ueberschrift, text, nummer, gesamt, icon } = req.body || {};
 
   if (!ueberschrift || !text) {
     return res.status(400).json({ error: "ueberschrift und text sind erforderlich" });
   }
 
   try {
-    const buffer = await renderSlideImage({ ueberschrift, text, nummer, gesamt });
+    const buffer = await renderSlideImage({ ueberschrift, text, nummer, gesamt, icon });
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
   } catch (err) {
