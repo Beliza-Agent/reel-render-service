@@ -22,6 +22,10 @@ const OUTPUT_H = 1536;
 const ACCENT_COLOR = "rgb(190, 130, 88)";
 const TEXT_COLOR = "rgb(20, 20, 20)";
 
+// NEU: eigene Masse fuer Karussell-Slides (Instagram-Format 4:5)
+const SLIDE_W = 1080;
+const SLIDE_H = 1350;
+
 function download(url, destPath) {
   return new Promise((resolve, reject) => {
     const client = url.startsWith("https") ? https : http;
@@ -101,8 +105,102 @@ async function renderHeadlineImage(lines) {
   return canvas.toBuffer("image/png");
 }
 
+// NEU: bricht einen Text an Wortgrenzen um, sodass jede Zeile in maxWidth passt
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let current = "";
+
+  for (const word of words) {
+    const test = current ? current + " " + word : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+// NEU: zeichnet eine Karussell-Slide (Ueberschrift + Fliesstext) auf die bestehende Vorlage
+async function renderSlideImage({ ueberschrift, text, nummer, gesamt }) {
+  const template = await loadImage(TEMPLATE_PATH);
+  const canvas = createCanvas(SLIDE_W, SLIDE_H);
+  const ctx = canvas.getContext("2d");
+
+  ctx.drawImage(template, 0, 0, SLIDE_W, SLIDE_H);
+
+  const marginX = Math.round(SLIDE_W * 0.09);
+  const maxTextWidth = SLIDE_W - marginX * 2;
+  ctx.textBaseline = "top";
+
+  // Slide-Zaehler oben rechts (z. B. "3/10")
+  if (nummer && gesamt) {
+    ctx.font = `${Math.round(SLIDE_W * 0.032)}px "Poppins-Medium"`;
+    ctx.fillStyle = ACCENT_COLOR;
+    const counterText = `${nummer}/${gesamt}`;
+    const counterWidth = ctx.measureText(counterText).width;
+    ctx.fillText(counterText, SLIDE_W - marginX - counterWidth, Math.round(SLIDE_H * 0.05));
+  }
+
+  // Akzent-Strich links, wie beim Reel-Template
+  ctx.strokeStyle = ACCENT_COLOR;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(Math.round(SLIDE_W * 0.03), Math.round(SLIDE_H * 0.12));
+  ctx.lineTo(Math.round(SLIDE_W * 0.03), Math.round(SLIDE_H * 0.19));
+  ctx.stroke();
+
+  // Ueberschrift: Schriftgroesse verkleinern, bis max. 4 Zeilen passen
+  let headlineFontSize = Math.round(SLIDE_W * 0.058);
+  let headlineLines = [];
+  do {
+    ctx.font = `${headlineFontSize}px "Poppins-Bold"`;
+    headlineLines = wrapText(ctx, ueberschrift.toUpperCase(), maxTextWidth);
+    if (headlineLines.length > 4) headlineFontSize -= 2;
+  } while (headlineLines.length > 4 && headlineFontSize > 24);
+
+  const headlineLineGap = Math.round(headlineFontSize * 1.2);
+  let y = Math.round(SLIDE_H * 0.15);
+
+  ctx.fillStyle = TEXT_COLOR;
+  headlineLines.forEach((line, i) => {
+    ctx.fillText(line, marginX, y + i * headlineLineGap);
+  });
+
+  y += headlineLines.length * headlineLineGap + Math.round(SLIDE_H * 0.035);
+
+  // Fliesstext: Schriftgroesse verkleinern, bis er in den verbleibenden Platz passt
+  const maxBodyBottom = Math.round(SLIDE_H * 0.92);
+  const availableHeight = maxBodyBottom - y;
+  let bodyFontSize = Math.round(SLIDE_W * 0.034);
+  let bodyLines = [];
+  let bodyLineGap = 0;
+
+  do {
+    ctx.font = `${bodyFontSize}px "Poppins-Medium"`;
+    bodyLines = wrapText(ctx, text, maxTextWidth);
+    bodyLineGap = Math.round(bodyFontSize * 1.45);
+    if (bodyLines.length * bodyLineGap > availableHeight) bodyFontSize -= 1;
+  } while (bodyLines.length * bodyLineGap > availableHeight && bodyFontSize > 16);
+
+  ctx.fillStyle = TEXT_COLOR;
+  bodyLines.forEach((line, i) => {
+    ctx.fillText(line, marginX, y + i * bodyLineGap);
+  });
+
+  // Kleines Branding unten
+  ctx.font = `${Math.round(SLIDE_W * 0.026)}px "Poppins-Medium"`;
+  ctx.fillStyle = ACCENT_COLOR;
+  ctx.fillText("BELIZA AGENTICS", marginX, Math.round(SLIDE_H * 0.955));
+
+  return canvas.toBuffer("image/png");
+}
+
 app.get("/", (req, res) => {
-  res.send("Reel-Render-Dienst laeuft. POST /render-reel mit { headline_lines, audio_url }.");
+  res.send("Reel-Render-Dienst laeuft. POST /render-reel mit { headline_lines, audio_url }. POST /render-slide mit { ueberschrift, text, nummer, gesamt }.");
 });
 
 app.post("/render-reel", async (req, res) => {
@@ -158,6 +256,23 @@ app.post("/render-reel", async (req, res) => {
     });
   } catch (err) {
     fs.rmSync(workDir, { recursive: true, force: true });
+    res.status(500).json({ error: String(err.message || err) });
+  }
+});
+
+// NEU: Endpoint fuer einzelne Karussell-Slides (statisches PNG, kein Audio/Video)
+app.post("/render-slide", async (req, res) => {
+  const { ueberschrift, text, nummer, gesamt } = req.body || {};
+
+  if (!ueberschrift || !text) {
+    return res.status(400).json({ error: "ueberschrift und text sind erforderlich" });
+  }
+
+  try {
+    const buffer = await renderSlideImage({ ueberschrift, text, nummer, gesamt });
+    res.setHeader("Content-Type", "image/png");
+    res.send(buffer);
+  } catch (err) {
     res.status(500).json({ error: String(err.message || err) });
   }
 });
