@@ -12,11 +12,13 @@ const app = express();
 app.use(express.json());
 
 const TEMPLATE_PATH = path.join(__dirname, "assets", "template.png");
-const FONT_PATH = path.join(__dirname, "assets", "Poppins-Bold.ttf");
-registerFont(FONT_PATH, { family: "Poppins-Bold" });
+const FONT_BOLD_PATH = path.join(__dirname, "assets", "Poppins-Bold.ttf");
+const FONT_MEDIUM_PATH = path.join(__dirname, "assets", "Poppins-Medium.ttf");
+registerFont(FONT_BOLD_PATH, { family: "Poppins-Bold" });
+registerFont(FONT_MEDIUM_PATH, { family: "Poppins-Medium" });
 
-const OUTPUT_W = 720;
-const OUTPUT_H = 1280;
+const OUTPUT_W = 864;
+const OUTPUT_H = 1536;
 const ACCENT_COLOR = "rgb(190, 130, 88)";
 const TEXT_COLOR = "rgb(20, 20, 20)";
 
@@ -61,17 +63,17 @@ async function renderHeadlineImage(lines) {
 
   const marginX = Math.round(OUTPUT_W * 0.075);
   const maxTextWidth = OUTPUT_W - marginX * 2;
-  let fontSize = Math.round(OUTPUT_W * 0.105);
+  let fontSize = Math.round(OUTPUT_W * 0.075);
 
   ctx.textBaseline = "top";
 
   // Schriftgroesse so lange verkleinern, bis die laengste Zeile sicher hineinpasst
   const upperLines = lines.map((l) => l.replace(/ß/g, "SS").toUpperCase());
   let widest = maxTextWidth + 1;
-  while (widest > maxTextWidth && fontSize > 24) {
-    ctx.font = `${fontSize}px "Poppins-Bold"`;
+  while (widest > maxTextWidth && fontSize > 18) {
+    ctx.font = `${fontSize}px "Poppins-Medium"`;
     widest = Math.max(...upperLines.map((l) => ctx.measureText(l).width));
-    if (widest > maxTextWidth) fontSize -= 4;
+    if (widest > maxTextWidth) fontSize -= 3;
   }
 
   const lineGap = Math.round(fontSize * 1.15);
@@ -84,7 +86,7 @@ async function renderHeadlineImage(lines) {
   ctx.lineTo(Math.round(OUTPUT_W * 0.03), Math.round(OUTPUT_H * 0.38));
   ctx.stroke();
 
-  ctx.font = `${fontSize}px "Poppins-Bold"`;
+  ctx.font = `${fontSize}px "Poppins-Medium"`;
   upperLines.forEach((line, i) => {
     ctx.fillStyle = i === upperLines.length - 1 ? ACCENT_COLOR : TEXT_COLOR;
     ctx.fillText(line, marginX, y + i * lineGap);
