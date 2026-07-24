@@ -286,52 +286,70 @@ function drawIcon(ctx, iconName, x, y, size, color) {
   ctx.restore();
 }
 
-// Zeichnet eine Karussell-Slide (Icon + Ueberschrift + Fliesstext) auf die bestehende Vorlage
+// Zeichnet eine Karussell-Slide (Icon + Ueberschrift + Fliesstext) auf die bestehende Vorlage.
+// Headline-Stil ist bewusst identisch zur Reel-Headline (renderHeadlineImage): gleiche Schriftgroessen-Logik,
+// gleiche Schriftart (Poppins-Medium), letzte Zeile in Akzentfarbe, Akzent-Strich darueber, Unterstreichung darunter.
 async function renderSlideImage({ ueberschrift, text, nummer, gesamt, icon }) {
   const template = await loadImage(TEMPLATE_PATH);
   const canvas = createCanvas(SLIDE_W, SLIDE_H);
   const ctx = canvas.getContext("2d");
 
-  // GEAENDERT: cover statt stretch, damit die Vorlage nicht verzerrt wird
   drawImageCover(ctx, template, SLIDE_W, SLIDE_H);
 
-  const marginX = Math.round(SLIDE_W * 0.09);
+  const marginX = Math.round(SLIDE_W * 0.075);
   const maxTextWidth = SLIDE_W - marginX * 2;
   ctx.textBaseline = "top";
 
-  if (nummer && gesamt) {
-    ctx.font = `${Math.round(SLIDE_W * 0.032)}px "Poppins-Medium"`;
-    ctx.fillStyle = ACCENT_COLOR;
-    const counterText = `${nummer}/${gesamt}`;
-    const counterWidth = ctx.measureText(counterText).width;
-    ctx.fillText(counterText, SLIDE_W - marginX - counterWidth, Math.round(SLIDE_H * 0.05));
-  }
-
-  // NEU: Icon statt Akzent-Strich
-  const iconSize = Math.round(SLIDE_W * 0.13);
-  const iconY = Math.round(SLIDE_H * 0.09);
+  // Icon: klein, oberhalb des Akzent-Strichs, tritt hinter die Headline zurueck
   if (icon && icon !== "none") {
+    const iconSize = Math.round(SLIDE_W * 0.075);
+    const iconY = Math.round(SLIDE_H * 0.12);
     drawIcon(ctx, icon, marginX, iconY, iconSize, ACCENT_COLOR);
   }
 
-  let headlineFontSize = Math.round(SLIDE_W * 0.058);
+  // Akzent-Strich (wie beim Reel)
+  ctx.strokeStyle = ACCENT_COLOR;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(marginX, Math.round(SLIDE_H * 0.235));
+  ctx.lineTo(marginX, Math.round(SLIDE_H * 0.265));
+  ctx.stroke();
+
+  // Headline: gleiche Groessen-/Schrumpf-Logik wie beim Reel (renderHeadlineImage)
+  const upperLines = ueberschrift.replace(/ß/g, "SS").toUpperCase();
+  let headlineFontSize = Math.round(SLIDE_W * 0.072);
   let headlineLines = [];
-  do {
-    ctx.font = `${headlineFontSize}px "Poppins-Bold"`;
-    headlineLines = wrapText(ctx, ueberschrift.toUpperCase(), maxTextWidth);
-    if (headlineLines.length > 4) headlineFontSize -= 2;
-  } while (headlineLines.length > 4 && headlineFontSize > 24);
+  let widest = maxTextWidth + 1;
 
-  const headlineLineGap = Math.round(headlineFontSize * 1.2);
-  let y = iconY + iconSize + Math.round(SLIDE_H * 0.045);
+  while (headlineFontSize > 22) {
+    ctx.font = `${headlineFontSize}px "Poppins-Medium"`;
+    headlineLines = wrapText(ctx, upperLines, maxTextWidth);
+    widest = Math.max(...headlineLines.map((l) => ctx.measureText(l).width));
+    if (widest <= maxTextWidth && headlineLines.length <= 4) break;
+    headlineFontSize -= 3;
+  }
 
-  ctx.fillStyle = TEXT_COLOR;
+  const headlineLineGap = Math.round(headlineFontSize * 1.15);
+  let y = Math.round(SLIDE_H * 0.30);
+
+  ctx.font = `${headlineFontSize}px "Poppins-Medium"`;
   headlineLines.forEach((line, i) => {
+    ctx.fillStyle = i === headlineLines.length - 1 ? ACCENT_COLOR : TEXT_COLOR;
     ctx.fillText(line, marginX, y + i * headlineLineGap);
   });
 
-  y += headlineLines.length * headlineLineGap + Math.round(SLIDE_H * 0.035);
+  // Unterstreichung (wie beim Reel)
+  const underlineY = y + headlineLines.length * headlineLineGap + Math.round(SLIDE_H * 0.02);
+  ctx.strokeStyle = ACCENT_COLOR;
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(marginX, underlineY);
+  ctx.lineTo(marginX + Math.round(SLIDE_W * 0.12), underlineY);
+  ctx.stroke();
 
+  y = underlineY + Math.round(SLIDE_H * 0.04);
+
+  // Fliesstext
   const maxBodyBottom = Math.round(SLIDE_H * 0.92);
   const availableHeight = maxBodyBottom - y;
   let bodyFontSize = Math.round(SLIDE_W * 0.034);
@@ -349,8 +367,6 @@ async function renderSlideImage({ ueberschrift, text, nummer, gesamt, icon }) {
   bodyLines.forEach((line, i) => {
     ctx.fillText(line, marginX, y + i * bodyLineGap);
   });
-
-  // ENTFERNT: doppeltes "BELIZA AGENTICS"-Branding (steht schon im template.png)
 
   return canvas.toBuffer("image/png");
 }
